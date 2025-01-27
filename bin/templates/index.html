@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LoL Game Predictor</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/awesomplete/1.1.5/awesomplete.min.css" />
+    <style>
+        .champion-select {
+            background-color: rgba(44, 62, 80, 0.9);
+            border: 1px solid #34495e;
+        }
+        .gradient-bg {
+            background: linear-gradient(135deg, #1a1c20 0%, #2c3e50 100%);
+        }
+        .result-card {
+            background-color: rgba(44, 62, 80, 0.8);
+            backdrop-filter: blur(10px);
+        }
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen text-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-4xl font-bold text-center mb-8">League of Legends Game Predictor</h1>
+        
+        <div class="grid md:grid-cols-2 gap-8">
+            <!-- Team 1 -->
+            <div class="bg-gray-800 rounded-lg p-6">
+                <h2 class="text-2xl font-semibold mb-4 text-blue-400">Team 1</h2>
+                <div class="space-y-4" id="team1">
+                </div>
+            </div>
+
+            <!-- Team 2 -->
+            <div class="bg-gray-800 rounded-lg p-6">
+                <h2 class="text-2xl font-semibold mb-4 text-red-400">Team 2</h2>
+                <div class="space-y-4" id="team2">
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Stats -->
+        <div class="mt-8 bg-gray-800 rounded-lg p-6">
+            <h2 class="text-2xl font-semibold mb-4">Game Statistics</h2>
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div class="flex items-center space-x-2">
+                    <input type="checkbox" id="firstBlood" class="rounded">
+                    <label for="firstBlood">First Blood</label>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <input type="checkbox" id="firstDragon" class="rounded">
+                    <label for="firstDragon">First Dragon</label>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <input type="checkbox" id="firstTower" class="rounded">
+                    <label for="firstTower">First Tower</label>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <input type="checkbox" id="firstInhibitor" class="rounded">
+                    <label for="firstInhibitor">First Inhibitor</label>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <input type="checkbox" id="firstBaron" class="rounded">
+                    <label for="firstBaron">First Baron</label>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <input type="checkbox" id="firstRiftHerald" class="rounded">
+                    <label for="firstRiftHerald">First Rift Herald</label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Predict Button -->
+        <div class="mt-8 text-center">
+            <button onclick="predict()" id="predict-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg transition duration-300">
+                Predict Winner
+            </button>
+            <div id="loading-spinner" class="loading-spinner mx-auto mt-4 hidden"></div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="results" class="mt-8 result-card rounded-lg p-6 hidden">
+            <h2 class="text-2xl font-semibold mb-4">Prediction Results</h2>
+            <div class="grid md:grid-cols-2 gap-4">
+                <div class="text-center">
+                    <h3 class="text-xl mb-2">Team 1</h3>
+                    <div id="team1-probability" class="text-3xl font-bold text-blue-400">--%</div>
+                </div>
+                <div class="text-center">
+                    <h3 class="text-xl mb-2">Team 2</h3>
+                    <div id="team2-probability" class="text-3xl font-bold text-red-400">--%</div>
+                </div>
+            </div>
+            <div class="mt-4 text-center">
+                <div class="text-xl">Predicted Winner: <span id="predicted-winner" class="font-bold">--</span></div>
+                <div class="text-sm text-gray-400 mt-2">Model Accuracy: <span id="model-accuracy">--%</span></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/awesomplete/1.1.5/awesomplete.min.js"></script>
+    <script>
+        let championNames = [];
+
+        async function fetchChampionNames() {
+            try {
+                const response = await fetch('/champion_names');
+                const data = await response.json();
+                championNames = data;
+                setupAutocomplete();
+            } catch (error) {
+                console.error('Error fetching champion names:', error);
+            }
+        }
+
+        function setupAutocomplete() {
+            const inputs = document.querySelectorAll('.champion-input');
+            inputs.forEach(input => {
+                new Awesomplete(input, {
+                    list: championNames,
+                    minChars: 1,
+                    autoFirst: true,
+                });
+            });
+        }
+
+        function addChampionInputs() {
+            ['team1', 'team2'].forEach(team => {
+                const container = document.getElementById(team);
+                container.innerHTML = '';
+                
+                for (let i = 1; i <= 5; i++) {
+                    const div = document.createElement('div');
+                    div.className = 'mb-4';
+                    div.innerHTML = `
+                        <label class="block mb-2">Champion ${i}:</label>
+                        <input type="text" class="w-full bg-gray-700 rounded px-3 py-2 text-white champion-input" placeholder="Enter champion name">
+                    `;
+                    container.appendChild(div);
+                }
+            });
+            setupAutocomplete();
+        }
+
+        function validateForm() {
+            const inputs = document.querySelectorAll('.champion-input');
+            for (const input of inputs) {
+                if (!input.value.trim()) {
+                    alert('Please fill out all champion names.');
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        async function predict() {
+            if (!validateForm()) return;
+
+            const predictButton = document.getElementById('predict-button');
+            const loadingSpinner = document.getElementById('loading-spinner');
+            const resultsSection = document.getElementById('results');
+
+            predictButton.disabled = true;
+            loadingSpinner.classList.remove('hidden');
+            resultsSection.classList.add('hidden');
+
+            const team1Champions = Array.from(document.querySelectorAll('#team1 input')).map(input => input.value);
+            const team2Champions = Array.from(document.querySelectorAll('#team2 input')).map(input => input.value);
+
+            const gameStats = {
+                first_blood: document.getElementById('firstBlood').checked,
+                first_dragon: document.getElementById('firstDragon').checked,
+                first_tower: document.getElementById('firstTower').checked,
+                first_inhibitor: document.getElementById('firstInhibitor').checked,
+                first_baron: document.getElementById('firstBaron').checked,
+                first_rift_herald: document.getElementById('firstRiftHerald').checked
+            };
+
+            const requestData = {
+                team1: { champions: team1Champions },
+                team2: { champions: team2Champions },
+                ...gameStats
+            };
+
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestData)
+                });
+
+                const data = await response.json();
+
+                resultsSection.classList.remove('hidden');
+                document.getElementById('team1-probability').textContent = `${(data.team1_win_probability * 100).toFixed(1)}%`;
+                document.getElementById('team2-probability').textContent = `${(data.team2_win_probability * 100).toFixed(1)}%`;
+                document.getElementById('predicted-winner').textContent = `Team ${data.predicted_winner}`;
+                document.getElementById('model-accuracy').textContent = `${(data.model_accuracy * 100).toFixed(1)}%`;
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error making prediction. Please check the console for details.');
+            } finally {
+                predictButton.disabled = false;
+                loadingSpinner.classList.add('hidden');
+            }
+        }
+
+        addChampionInputs();
+        fetchChampionNames();
+    </script>
+</body>
+</html>
