@@ -19,6 +19,6 @@ fi
 cd bin
 
 echo "Starting Python API..."
-uvicorn main:app --host 0.0.0.0 --port 8006 &
+uvicorn main:app --host 0.0.0.0 --port 8008 &
 
 wait
