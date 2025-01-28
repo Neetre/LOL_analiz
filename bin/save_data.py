@@ -51,16 +51,19 @@ def load_hf_to_csv(repo_id, token, dest_path="../data/"):
         for file in files:
             if file.endswith(".csv"):
                 print(f"Downloading {file}...")
-                api.download_file(
+                from huggingface_hub import hf_hub_download
+                
+                hf_hub_download(
                     repo_id=repo_id,
                     filename=file,
-                    local_dir=dest_path,
                     repo_type="dataset",
-                    token=token
+                    token=token,
+                    local_dir=dest_path
                 )
                 print(f"Successfully downloaded {file} to {dest_path}")
     except Exception as e:
         print(f"Error downloading files: {str(e)}")
+
 
 if __name__ == "__main__":
     try:
