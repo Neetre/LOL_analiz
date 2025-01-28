@@ -33,23 +33,34 @@ def upload_csv_to_hf(csv_files, repo_id, token):
         )
         print(f"Successfully uploaded {csv_file}")
 
+
 def load_hf_to_csv(repo_id, token, dest_path="../data/"):
+    """
+    Load CSV files from Hugging Face Hub
+    
+    Args:
+        repo_id (str): Hugging Face repository ID (format: 'username/repo-name')
+        token (str): Hugging Face API token
+        dest_path (str): Local directory to save downloaded files
+    """
     api = HfApi()
     os.makedirs(dest_path, exist_ok=True)
     
-    files = api.list_repo_files(repo_id=repo_id, token=token)
-    for file in files:
-        if file.endswith(".csv"):
-            print(f"Downloading {file}...")
-            file_path = os.path.join(dest_path, os.path.basename(file))
-            api.download_file(
-                repo_id=repo_id,
-                filename=file,
-                local_dir=dest_path,
-                repot_type="dataset",
-                token=token
-            )
-            print(f"Saved to {file_path}")
+    try:
+        files = api.list_repo_files(repo_id=repo_id, repo_type="dataset", token=token)
+        for file in files:
+            if file.endswith(".csv"):
+                print(f"Downloading {file}...")
+                api.download_file(
+                    repo_id=repo_id,
+                    filename=file,
+                    local_dir=dest_path,
+                    repo_type="dataset",
+                    token=token
+                )
+                print(f"Successfully downloaded {file} to {dest_path}")
+    except Exception as e:
+        print(f"Error downloading files: {str(e)}")
 
 if __name__ == "__main__":
     try:
