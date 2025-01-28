@@ -46,6 +46,7 @@ def load_hf_to_csv(repo_id, token, dest_path="../data/"):
                 repo_id=repo_id,
                 filename=file,
                 local_dir=dest_path,
+                repot_type="dataset",
                 token=token
             )
             print(f"Saved to {file_path}")
