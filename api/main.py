@@ -1,4 +1,6 @@
+import os
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -8,8 +10,8 @@ import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 import json
-import yaml
 from fastapi.responses import JSONResponse, HTMLResponse
+import logging
 
 
 app = FastAPI(
@@ -18,8 +20,16 @@ app = FastAPI(
     version="1.0.0"
 )
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# app.mount("/static", StaticFiles(directory="static"), name="static")
+# templates = Jinja2Templates(directory="templates")
 
 class Champion(BaseModel):
     name: str
@@ -32,12 +42,12 @@ class Team(BaseModel):
 class GameData(BaseModel):
     team1: Team
     team2: Team
-    first_blood: Optional[bool] = None
-    first_dragon: Optional[bool] = None
-    first_tower: Optional[bool] = None
-    first_inhibitor: Optional[bool] = None
-    first_baron: Optional[bool] = None
-    first_rift_herald: Optional[bool] = None
+    first_blood: Optional[int] = None
+    first_dragon: Optional[int] = None
+    first_tower: Optional[int] = None
+    first_inhibitor: Optional[int] = None
+    first_baron: Optional[int] = None
+    first_rift_herald: Optional[int] = None
 
 
 class PredictionResponse(BaseModel):
@@ -53,19 +63,34 @@ class WinrateResponse(BaseModel):
     total_games: int
 
 
+class User(BaseModel):
+    username: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
 MODEL = None
 CHAMPION_DATA = None
+CHAMPION_DICT = {}  # {champion_name: champion_id}
 TRAINING_DATA = None
 
 
 def load_data():
     """Initialize the model and load required data"""
-    global MODEL, CHAMPION_DATA, TRAINING_DATA
+    global MODEL, CHAMPION_DATA, CHAMPION_DICT, TRAINING_DATA
     
     try:
         TRAINING_DATA = pd.read_csv('../data/game_DIAMOND.csv')
         with open('../data/champion_info.json', 'r') as f:
             CHAMPION_DATA = json.load(f)
+
+        for champ_name, champ_data in CHAMPION_DATA['data'].items():
+            CHAMPION_DICT[champ_name.lower()] = int(champ_data['id'])
+
     except FileNotFoundError as e:
         raise RuntimeError(f"Required data files not found: {str(e)}")
 
@@ -145,12 +170,12 @@ async def startup_event():
     """Load data and train model on startup"""
     load_data()
 
-
+'''
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     """Render the home page"""
     return templates.TemplateResponse("index.html", {"request": request})
-
+'''
 
 @app.post("/predict", response_model=PredictionResponse)
 async def predict_game(game_data: GameData):
@@ -159,7 +184,7 @@ async def predict_game(game_data: GameData):
     """
     if MODEL is None:
         raise HTTPException(status_code=500, detail="Model not initialized")
-    
+
     try:
         predict_data = prepare_prediction_data(game_data)
 
@@ -188,7 +213,7 @@ async def get_champion_names():
         raise HTTPException(status_code=500, detail="Champion data not initialized")
     
     try:
-        champion_names = list(CHAMPION_DATA.keys())
+        champion_names = list(CHAMPION_DATA["data"].keys())
         return JSONResponse(content=champion_names)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -203,22 +228,63 @@ async def get_champion_winrate(champion_name: str):
         raise HTTPException(status_code=500, detail="Training data not initialized")
     
     try:
-        wins1 = len(TRAINING_DATA[(TRAINING_DATA[f't1_{champion_name}'] == 1) & (TRAINING_DATA['winner'] == 1)])
-        wins2 = len(TRAINING_DATA[(TRAINING_DATA[f't2_{champion_name}'] == 1) & (TRAINING_DATA['winner'] == 2)])
-        losses1 = len(TRAINING_DATA[(TRAINING_DATA[f't1_{champion_name}'] == 1) & (TRAINING_DATA['winner'] == 2)])
-        losses2 = len(TRAINING_DATA[(TRAINING_DATA[f't2_{champion_name}'] == 1) & (TRAINING_DATA['winner'] == 1)])
+        champ_id = CHAMPION_DICT.get(champion_name.lower())
+        if champ_id is None:
+            raise HTTPException(status_code=404, detail=f"Champion {champion_name} not found")
+
+        t1_cols = [f't1_champ{i}' for i in range(1, 6)]
+        t2_cols = [f't2_champ{i}' for i in range(1, 6)]
+
+        t1_matches = TRAINING_DATA[TRAINING_DATA[t1_cols].eq(champ_id).any(axis=1)]
+        wins1 = len(t1_matches[t1_matches['winner'] == 1])
+        losses1 = len(t1_matches[t1_matches['winner'] == 2])
+
+        t2_matches = TRAINING_DATA[TRAINING_DATA[t2_cols].eq(champ_id).any(axis=1)]
+        wins2 = len(t2_matches[t2_matches['winner'] == 2])
+        losses2 = len(t2_matches[t2_matches['winner'] == 1])
         
         total_games = wins1 + wins2 + losses1 + losses2
         if total_games == 0:
             raise HTTPException(status_code=404, detail=f"No games found for champion {champion_name}")
             
         winrate = (wins1 + wins2) / total_games
-        
         return WinrateResponse(
             champion=champion_name,
             winrate=float(winrate),
             total_games=total_games
         )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/predict/random")
+async def random_prediction():
+    """Generate a random game and predict the outcome"""
+    if CHAMPION_DATA is None:
+        raise HTTPException(status_code=500, detail="Champion data not initialized")
+    
+    try:
+        team1_champs = np.random.choice(list(CHAMPION_DATA["data"].keys()), 5)
+        team2_champs = np.random.choice(list(CHAMPION_DATA["data"].keys()), 5)
+        game_data = GameData(
+            team1=Team(champions=team1_champs),
+            team2=Team(champions=team2_champs)
+        )
+        data = await predict_game(game_data)
+        print(game_data)
+        print(data)
+        return {
+            "teams": {
+                "team1": team1_champs.tolist(),
+                "team2": team2_champs.tolist()
+            },
+            "prediction": {
+                "team1_win_probability": data.team1_win_probability,
+                "team2_win_probability": data.team2_win_probability,
+                "predicted_winner": data.predicted_winner,
+                "model_accuracy": data.model_accuracy
+            }
+        }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
