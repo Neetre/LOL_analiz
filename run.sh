@@ -18,6 +18,10 @@ fi
 
 cd bin
 
+# Start fron end
+
+npm run dev &
+
 echo "Starting Python API..."
 uvicorn main:app --host 0.0.0.0 --port 8008 &
 
