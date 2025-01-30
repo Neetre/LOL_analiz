@@ -135,6 +135,17 @@ export const PredictionForm: React.FC<PredictionFormProps> = ({ isDarkMode }) =>
     }
   };
 
+  const handleClear = () => {
+    setTeam1Champions(['', '', '', '', '']);
+    setTeam2Champions(['', '', '', '', '']);
+    setGameStats(initialGameStats);
+    setPrediction(null);
+    setError(null);
+    setChampionName('');
+    setWinrate(null);
+    setTotalGames(null);
+  };
+
   const inputClasses = `mb-2 w-full p-2 border rounded focus:ring-2 focus:ring-purple-500 ${
     isDarkMode
       ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-400'
@@ -287,6 +298,13 @@ export const PredictionForm: React.FC<PredictionFormProps> = ({ isDarkMode }) =>
             Winrate: {winrate}% (Total Games: {totalGames})
           </p>
         )}
+
+        <button
+          onClick={handleClear}
+          className="w-full py-3 px-6 bg-gray-500 text-white rounded-lg hover:bg-gray-600 mb-4"
+        >
+        Clear
+      </button>
       </div>
     </div>
   );
