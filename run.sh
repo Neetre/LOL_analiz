@@ -18,7 +18,14 @@ fi
 
 cd bin
 
-npm run dev &
+echo "Starting Node.js development server..."
+
+npm install
+
+if ! npm run dev &> /dev/null &; then
+    echo "Error: Failed to start Node.js server"
+    exit 1
+fi
 
 echo "Starting Python API..."
 uvicorn main:app --host 0.0.0.0 --port 8008 &
