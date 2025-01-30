@@ -19,6 +19,7 @@ Here is a screenshot of the application (don't judge the team composition, it's 
 ## Requirements
 
 - Python 3.9 or higher
+- Node.js 14 or higher
 
 ### Python packages
 
