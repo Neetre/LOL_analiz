@@ -6,8 +6,8 @@
 
 As a LoL player, I wanted to create a project that would allow me to predict the outcome of a game based on the champions selected by the players.
 Now I've created this project that lets you do just that.
-The project is written in Python and uses the FastAPI framework to create a web application that displays information about the game.
-For now the project is in the early stages of development, so the predictions may not be accurate, and the Frontend is very simple, but I plan to improve it in the future: better predictions, better Frontend, and more features (live game data).
+The project is written in Python and uses the FastAPI framework as the backend, and the frontend is written in React.
+For now the project is in the early stages of development, so the predictions may not be accurate, and the Frontend is very simple, but I plan to improve it in the future: better predictions, and more features (live game data).
 
 You can try the application [here](http://lol.figliolo.it)
 
