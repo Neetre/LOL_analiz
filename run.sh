@@ -18,8 +18,6 @@ fi
 
 cd bin
 
-# Start fron end
-
 npm run dev &
 
 echo "Starting Python API..."
