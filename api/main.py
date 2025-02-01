@@ -40,14 +40,9 @@ class Team(BaseModel):
 
 
 class GameData(BaseModel):
-    team1: Team
-    team2: Team
-    first_blood: Optional[int] = None
-    first_dragon: Optional[int] = None
-    first_tower: Optional[int] = None
-    first_inhibitor: Optional[int] = None
-    first_baron: Optional[int] = None
-    first_rift_herald: Optional[int] = None
+    t1_team: Dict[str, str]  # {"t1_champ1": "ChampName", ...}
+    t2_team: Dict[str, str]  # {"t2_champ1": "ChampName", ...}
+    game_stats: Dict[str, int]
 
 
 class PredictionResponse(BaseModel):
@@ -77,6 +72,7 @@ MODEL = None
 CHAMPION_DATA = None
 CHAMPION_DICT = {}  # {champion_name: champion_id}
 TRAINING_DATA = None
+MODEL_ACCURACY = 0.0
 
 
 def load_data():
@@ -98,8 +94,7 @@ def load_data():
 
 
 def train_model():
-    """Train the Random Forest model"""
-    global MODEL, TRAINING_DATA
+    global MODEL, TRAINING_DATA, MODEL_ACCURACY
     
     processed_data = clean_df(TRAINING_DATA, start=False)
     X = processed_data.drop('winner', axis=1)
@@ -110,7 +105,8 @@ def train_model():
     MODEL = RandomForestClassifier(n_jobs=-1)
     MODEL.fit(X_train, y_train)
     
-    return MODEL.score(X_test, y_test)
+    MODEL_ACCURACY = MODEL.score(X_test, y_test)
+    return MODEL_ACCURACY
 
 
 def clean_df(df: pd.DataFrame, start: bool = False, game_stats: dict = None, is_prediction: bool = False) -> pd.DataFrame:
@@ -145,23 +141,41 @@ def clean_df(df: pd.DataFrame, start: bool = False, game_stats: dict = None, is_
 
 
 def prepare_prediction_data(game_data: GameData) -> pd.DataFrame:
-    """Prepare data for prediction"""
+    """Prepare data for prediction based on the new structure."""
+    t1_champs = []
+    for i in range(5):
+        champ_name = game_data.t1_team[f"t1_champ{i+1}"]
+        champ_id = CHAMPION_DICT.get(champ_name.lower())
+        if champ_id is None:
+            raise ValueError(f"Champion {champ_name} not found")
+        t1_champs.append(champ_id)
+    
+    t2_champs = []
+    for i in range(5):
+        champ_name = game_data.t2_team[f"t2_champ{i+1}"]
+        champ_id = CHAMPION_DICT.get(champ_name.lower())
+        if champ_id is None:
+            raise ValueError(f"Champion {champ_name} not found")
+        t2_champs.append(champ_id)
+    
     data = {
-        **{f't1_champ{i+1}': champ for i, champ in enumerate(game_data.team1.champions)},
-        **{f't2_champ{i+1}': champ for i, champ in enumerate(game_data.team2.champions)}
+        **{f't1_champ{i+1}': champ_id for i, champ_id in enumerate(t1_champs)},
+        **{f't2_champ{i+1}': champ_id for i, champ_id in enumerate(t2_champs)}
     }
 
-    game_stats = {
-        'firstBlood': game_data.first_blood,
-        'firstDragon': game_data.first_dragon,
-        'firstTower': game_data.first_tower,
-        'firstInhibitor': game_data.first_inhibitor,
-        'firstBaron': game_data.first_baron,
-        'firstRiftHerald': game_data.first_rift_herald
-    }
-    
+    game_stats = game_data.game_stats
+    if game_stats:
+        data.update({
+            'firstBlood': game_stats.get('firstBlood', 0),
+            'firstDragon': game_stats.get('firstDragon', 0),
+            'firstTower': game_stats.get('firstTower', 0),
+            'firstInhibitor': game_stats.get('firstInhibitor', 0),
+            'firstBaron': game_stats.get('firstBaron', 0),
+            'firstRiftHerald': game_stats.get('firstRiftHerald', 0)
+        })
+
     df = pd.DataFrame([data])
-    return clean_df(df, start=all(v is None for v in game_stats.values()), 
+    return clean_df(df, start=all(v == 0 for v in game_stats.values()), 
                    game_stats=game_stats, is_prediction=True)
 
 
@@ -176,6 +190,7 @@ async def home(request: Request):
     """Render the home page"""
     return templates.TemplateResponse("index.html", {"request": request})
 '''
+
 
 @app.post("/predict", response_model=PredictionResponse)
 async def predict_game(game_data: GameData):
@@ -196,12 +211,12 @@ async def predict_game(game_data: GameData):
         probabilities = MODEL.predict_proba(predict_data)[0]
         prediction = MODEL.predict(predict_data)[0]
         
-        return PredictionResponse(
-            team1_win_probability=float(probabilities[0]),
-            team2_win_probability=float(probabilities[1]),
-            predicted_winner=int(prediction),
-            model_accuracy=MODEL.score(predict_data, [prediction])
-        )
+        return {
+            "team1_win_probability": float(probabilities[0]),
+            "team2_win_probability": float(probabilities[1]),
+            "predicted_winner": int(prediction),
+            "model_accuracy": float(MODEL_ACCURACY)  # Use stored accuracy
+        }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -264,28 +279,41 @@ async def random_prediction():
         raise HTTPException(status_code=500, detail="Champion data not initialized")
     
     try:
-        team1_champs = np.random.choice(list(CHAMPION_DATA["data"].keys()), 5)
-        team2_champs = np.random.choice(list(CHAMPION_DATA["data"].keys()), 5)
+        champions = list(CHAMPION_DATA["data"].keys())
+        team1_champs = np.random.choice(champions, 5)
+        team2_champs = np.random.choice(champions, 5)
+
+        t1_team = {f"t1_champ{i+1}": champ for i, champ in enumerate(team1_champs)}
+        t2_team = {f"t2_champ{i+1}": champ for i, champ in enumerate(team2_champs)}
+
         game_data = GameData(
-            team1=Team(champions=team1_champs),
-            team2=Team(champions=team2_champs)
+            t1_team=t1_team,
+            t2_team=t2_team,
+            game_stats={
+                "firstBlood": 0,
+                "firstDragon": 0,
+                "firstTower": 0,
+                "firstInhibitor": 0,
+                "firstBaron": 0,
+                "firstRiftHerald": 0
+            }
         )
+
         data = await predict_game(game_data)
-        print(game_data)
-        print(data)
         return {
             "teams": {
                 "team1": team1_champs.tolist(),
                 "team2": team2_champs.tolist()
             },
             "prediction": {
-                "team1_win_probability": data.team1_win_probability,
-                "team2_win_probability": data.team2_win_probability,
-                "predicted_winner": data.predicted_winner,
-                "model_accuracy": data.model_accuracy
+                "team1_win_probability": data["team1_win_probability"],
+                "team2_win_probability": data["team2_win_probability"],
+                "predicted_winner": data["predicted_winner"],
+                "model_accuracy": data["model_accuracy"]
             }
         }
     except Exception as e:
+        print(e)
         raise HTTPException(status_code=400, detail=str(e))
 
 

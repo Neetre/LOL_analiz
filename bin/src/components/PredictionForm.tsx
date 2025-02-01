@@ -65,8 +65,9 @@ export const PredictionForm: React.FC<PredictionFormProps> = ({ isDarkMode }) =>
       };
   
       const result = await predict(data);
-      setPrediction(result.prediction);
-    } catch (error) {
+    const predictedWinner = result.predicted_winner === 1 ? 'Team 1' : 'Team 2';
+    setPrediction(`Predicted Winner: ${predictedWinner} (Team 1: ${(result.team1_win_probability * 100).toFixed(2)}%, Team 2: ${(result.team2_win_probability * 100).toFixed(2)}%)`);
+  } catch (error) {
       console.error('Prediction failed:', error);
       setError('Failed to make prediction. Please try again.');
     } finally {

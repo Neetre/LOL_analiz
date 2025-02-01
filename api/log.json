@@ -1,0 +1,24 @@
+{
+    "t1_team": {
+        "t1_champ1": "Soraka",
+        "t1_champ2": "Zilean",
+        "t1_champ3": "JarvanIV",
+        "t1_champ4": "Braum",
+        "t1_champ5": "Mel"
+    },
+    "t2_team": {
+        "t2_champ1": "Sejuani",
+        "t2_champ2": "Malphite",
+        "t2_champ3": "Annie",
+        "t2_champ4": "Soraka",
+        "t2_champ5": "Lux"
+    },
+    "game_stats": {
+        "firstBlood": 0,
+        "firstDragon": 0,
+        "firstTower": 0,
+        "firstInhibitor": 0,
+        "firstBaron": 0,
+        "firstRiftHerald": 0
+    }
+}
